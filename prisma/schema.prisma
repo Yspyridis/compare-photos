@@ -1,0 +1,56 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Session {
+  id         String   @id @default(uuid())
+  title      String
+  createdAt  DateTime @default(now())
+  phones     String[] // ["A", "B"]
+  phoneNames Json?    // { "A": "iPhone 15", "B": "Pixel 8" }
+  scenes     Scene[]
+}
+
+model Scene {
+  id        String   @id @default(uuid())
+  sessionId String
+  index     Int
+  session   Session  @relation(fields: [sessionId], references: [id])
+  photos    Photo[]
+  comparison Comparison?
+
+  @@unique([sessionId, index])
+}
+
+model Photo {
+  id          String @id @default(uuid())
+  sceneId     String
+  phoneLabel  String // "A", "B", or "C"
+  storageKey  String // Path to full res in S3
+  thumbKey    String // Path to thumbnail
+  scene       Scene  @relation(fields: [sceneId], references: [id])
+}
+
+model Comparison {
+  id          String   @id @default(uuid())
+  sceneId     String   @unique
+  scene       Scene    @relation(fields: [sceneId], references: [id])
+  mapping     Json     // Stores blind mapping { "left": "photo_id_1" }
+  createdAt   DateTime @default(now())
+  votes       Vote[]
+}
+
+model Vote {
+  id           String     @id @default(uuid())
+  comparisonId String
+  comparison   Comparison @relation(fields: [comparisonId], references: [id])
+  choice       String     // "left", "right", "center", "tie"
+  revealed     Boolean    @default(false)
+  notes        String?
+  createdAt    DateTime   @default(now())
+}
