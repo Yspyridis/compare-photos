@@ -25,8 +25,8 @@ export default async function ComparePage({
     <ComparisonClient
       initialImages={comparisonData.images}
       comparisonId={comparisonData.comparisonId}
-      // Pass the real names down here
       phoneNames={scene.session.phoneNames as Record<string, string>}
+      sessionId={params.id}
     />
   );
 }

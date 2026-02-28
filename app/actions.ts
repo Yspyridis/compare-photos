@@ -1,8 +1,32 @@
 "use server";
 
 import prisma from "@/lib/prisma";
-import { processAndUploadImage, getSignedImageUrl } from "@/lib/storage";
+import {
+  processAndUploadImage,
+  getSignedImageUrl,
+  deleteS3Objects,
+} from "@/lib/storage";
 import { revalidatePath } from "next/cache";
+
+export interface ReviewPhoto {
+  id: string;
+  phoneLabel: string;
+  url: string;
+}
+
+export interface ReviewScene {
+  id: string;
+  index: number;
+  photos: ReviewPhoto[];
+}
+
+export interface ReviewSession {
+  id: string;
+  title: string;
+  phoneNames: Record<string, string>;
+  phones: string[];
+  scenes: ReviewScene[];
+}
 
 // 1. Create a new test session
 export async function createSession(
@@ -20,10 +44,11 @@ export async function createSession(
   return session;
 }
 
-// 2. Upload photo and auto-assign to a scene
+// 2. Upload photo to an explicit scene index
 export async function uploadPhoto(
   sessionId: string,
   phoneLabel: string,
+  sceneIndex: number,
   formData: FormData,
 ) {
   const file = formData.get("file") as File;
@@ -32,23 +57,18 @@ export async function uploadPhoto(
   const buffer = Buffer.from(await file.arrayBuffer());
   const { rawKey, thumbKey } = await processAndUploadImage(buffer, file.type);
 
-  // Simple logic: count photos for this phone to determine the scene index
-  const count = await prisma.photo.count({
-    where: { scene: { sessionId }, phoneLabel },
-  });
-
-  // Find or create the scene for this index
+  // Find or create the scene for this explicit index
   let scene = await prisma.scene.findUnique({
-    where: { sessionId_index: { sessionId, index: count } },
+    where: { sessionId_index: { sessionId, index: sceneIndex } },
   });
 
   if (!scene) {
     scene = await prisma.scene.create({
-      data: { sessionId, index: count },
+      data: { sessionId, index: sceneIndex },
     });
   }
 
-  await prisma.photo.create({
+  const photo = await prisma.photo.create({
     data: {
       sceneId: scene.id,
       phoneLabel,
@@ -58,6 +78,7 @@ export async function uploadPhoto(
   });
 
   revalidatePath(`/session/${sessionId}/upload`);
+  return { photoId: photo.id, sceneId: scene.id };
 }
 
 // 3. Get blinded comparison data
@@ -85,8 +106,12 @@ export async function getComparison(sceneId: string) {
     return { images, comparisonId: scene.comparison.id };
   }
 
-  // If NO comparison exists, create it now
-  const photos = [...scene.photos].sort(() => Math.random() - 0.5);
+  // If NO comparison exists, create it now — Fisher-Yates for a provably uniform shuffle
+  const photos = [...scene.photos];
+  for (let i = photos.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [photos[i], photos[j]] = [photos[j], photos[i]];
+  }
   const newMapping: Record<string, string> = {};
   const positions = ["left", "right"];
   if (photos.length > 2) positions.push("center");
@@ -113,7 +138,48 @@ export async function getComparison(sceneId: string) {
   return { images, comparisonId: newComp.id }; // Return the NEW ID
 }
 
-// 4. Reveal the truth
+// 5. Get full session data for the review/study tab (labels always revealed)
+export async function getSessionForReview(
+  sessionId: string,
+): Promise<ReviewSession> {
+  const session = await prisma.session.findUnique({
+    where: { id: sessionId },
+    include: {
+      scenes: {
+        orderBy: { index: "asc" },
+        include: { photos: true },
+      },
+    },
+  });
+
+  if (!session) throw new Error("Session not found");
+
+  const scenesWithUrls: ReviewScene[] = await Promise.all(
+    session.scenes.map(async (scene) => ({
+      id: scene.id,
+      index: scene.index,
+      photos: await Promise.all(
+        scene.photos
+          .sort((a, b) => a.phoneLabel.localeCompare(b.phoneLabel))
+          .map(async (photo) => ({
+            id: photo.id,
+            phoneLabel: photo.phoneLabel,
+            url: await getSignedImageUrl(photo.storageKey),
+          })),
+      ),
+    })),
+  );
+
+  return {
+    id: session.id,
+    title: session.title,
+    phoneNames: (session.phoneNames as Record<string, string>) || {},
+    phones: session.phones,
+    scenes: scenesWithUrls,
+  };
+}
+
+// 6. Reveal the truth
 export async function revealIdentity(comparisonId: string) {
   // If comparisonId is empty, it means the mapping wasn't initialized
   if (!comparisonId)
@@ -135,4 +201,102 @@ export async function revealIdentity(comparisonId: string) {
   });
 
   return result;
+}
+
+// 7. Delete a single photo (re-upload / redo flow)
+export async function deletePhoto(photoId: string, sessionId: string) {
+  const photo = await prisma.photo.findUnique({
+    where: { id: photoId },
+    include: {
+      scene: {
+        include: { comparison: { include: { votes: true } } },
+      },
+    },
+  });
+  if (!photo) return;
+
+  // Wipe S3 objects
+  await deleteS3Objects([photo.storageKey, photo.thumbKey]);
+
+  // Invalidate comparison for this scene (mapping is now stale)
+  if (photo.scene.comparison) {
+    await prisma.vote.deleteMany({
+      where: { comparisonId: photo.scene.comparison.id },
+    });
+    await prisma.comparison.delete({
+      where: { id: photo.scene.comparison.id },
+    });
+  }
+
+  await prisma.photo.delete({ where: { id: photoId } });
+  revalidatePath(`/session/${sessionId}/upload`);
+}
+
+// 8. Delete an entire scene and all its photos
+export async function deleteScene(sceneId: string, sessionId: string) {
+  const scene = await prisma.scene.findUnique({
+    where: { id: sceneId },
+    include: {
+      photos: true,
+      comparison: { include: { votes: true } },
+    },
+  });
+  if (!scene) return;
+
+  const s3Keys = scene.photos.flatMap((p) => [p.storageKey, p.thumbKey]);
+  await deleteS3Objects(s3Keys);
+
+  if (scene.comparison) {
+    await prisma.vote.deleteMany({
+      where: { comparisonId: scene.comparison.id },
+    });
+    await prisma.comparison.delete({ where: { id: scene.comparison.id } });
+  }
+
+  await prisma.photo.deleteMany({ where: { sceneId } });
+  await prisma.scene.delete({ where: { id: sceneId } });
+  revalidatePath(`/session/${sessionId}/upload`);
+}
+
+// 9. Delete an entire session and everything under it
+export async function deleteSession(sessionId: string) {
+  const session = await prisma.session.findUnique({
+    where: { id: sessionId },
+    include: {
+      scenes: {
+        include: {
+          photos: true,
+          comparison: { include: { votes: true } },
+        },
+      },
+    },
+  });
+  if (!session) return;
+
+  const s3Keys = session.scenes.flatMap((sc) =>
+    sc.photos.flatMap((p) => [p.storageKey, p.thumbKey]),
+  );
+  await deleteS3Objects(s3Keys);
+
+  const comparisonIds = session.scenes
+    .filter((sc) => sc.comparison)
+    .map((sc) => sc.comparison!.id);
+
+  if (comparisonIds.length > 0) {
+    await prisma.vote.deleteMany({
+      where: { comparisonId: { in: comparisonIds } },
+    });
+    await prisma.comparison.deleteMany({
+      where: { id: { in: comparisonIds } },
+    });
+  }
+
+  const sceneIds = session.scenes.map((sc) => sc.id);
+  if (sceneIds.length > 0) {
+    await prisma.photo.deleteMany({ where: { sceneId: { in: sceneIds } } });
+    await prisma.scene.deleteMany({ where: { id: { in: sceneIds } } });
+  }
+
+  await prisma.session.delete({ where: { id: sessionId } });
+  revalidatePath("/");
 }

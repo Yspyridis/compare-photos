@@ -6,7 +6,7 @@ import {
   ReactZoomPanPinchRef,
 } from "react-zoom-pan-pinch";
 import { revealIdentity } from "@/app/actions";
-import { Eye, Lock, Home } from "lucide-react";
+import { Eye, Lock, Home, BookOpen } from "lucide-react";
 import Link from "next/link";
 
 interface ImageBlock {
@@ -19,10 +19,12 @@ export default function ComparisonClient({
   initialImages,
   comparisonId,
   phoneNames,
+  sessionId,
 }: {
   initialImages: ImageBlock[];
   comparisonId: string;
   phoneNames: Record<string, string>;
+  sessionId: string;
 }) {
   const [revealed, setRevealed] = useState<Record<string, string> | null>(null);
   const [sync, setSync] = useState(true);
@@ -33,7 +35,7 @@ export default function ComparisonClient({
 
   const handleTransform = (
     ref: React.RefObject<ReactZoomPanPinchRef>,
-    state: any,
+    state: { scale: number; positionX: number; positionY: number },
   ) => {
     if (!sync) return;
 
@@ -90,7 +92,14 @@ export default function ComparisonClient({
             className="flex items-center gap-2 text-sm font-medium text-gray-400 hover:text-white transition-colors"
           >
             <Home size={18} />
-            New Comparison
+            Home
+          </Link>
+          <Link
+            href={`/session/${sessionId}/review`}
+            className="flex items-center gap-2 text-sm font-medium text-gray-400 hover:text-white transition-colors"
+          >
+            <BookOpen size={18} />
+            Review Session
           </Link>
           <label className="flex items-center gap-2 text-sm cursor-pointer hover:text-blue-400 transition-colors">
             <input
@@ -105,13 +114,9 @@ export default function ComparisonClient({
 
         <button
           onClick={toggleReveal}
-          className={`flex items-center gap-2 px-5 py-2 rounded-full font-bold transition-all ${
-            revealed
-              ? "bg-gray-700 hover:bg-gray-600 text-white shadow-inner"
-              : "bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/20"
-          }`}
+          className="flex items-center gap-2 px-5 py-2 rounded-xl font-semibold text-sm text-white border border-transparent hover:border-white/30 transition-all duration-300"
         >
-          {revealed ? <Lock size={18} /> : <Eye size={18} />}
+          {revealed ? <Lock size={16} /> : <Eye size={16} />}
           {revealed ? "Hide Identities" : "Reveal Identities"}
         </button>
       </div>
@@ -136,7 +141,7 @@ export default function ComparisonClient({
                       Slot: {img.position}
                     </span>
                     {revealed && (
-                      <span className="px-3 py-2 bg-blue-500 rounded-lg text-sm font-bold shadow-2xl animate-in fade-in slide-in-from-top-2 duration-500">
+                      <span className="px-3 py-1.5 text-sm font-semibold animate-in fade-in slide-in-from-top-2 duration-300">
                         {revealed[img.position]}
                       </span>
                     )}
@@ -145,7 +150,7 @@ export default function ComparisonClient({
 
                 <TransformWrapper
                   ref={ref}
-                  onTransformed={(e) => handleTransform(ref, e)}
+                  onTransformed={(_, state) => handleTransform(ref, state)}
                   minScale={1}
                   maxScale={10}
                 >

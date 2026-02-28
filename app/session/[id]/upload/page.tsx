@@ -7,11 +7,11 @@ export default async function UploadPage({
 }: {
   params: { id: string };
 }) {
-  // Fetch session and existing photos to show progress
   const session = await prisma.session.findUnique({
     where: { id: params.id },
     include: {
       scenes: {
+        orderBy: { index: "asc" },
         include: { photos: true },
       },
     },
@@ -19,8 +19,13 @@ export default async function UploadPage({
 
   if (!session) return notFound();
 
-  // Cast the JSON phoneNames from DB to a usable object
   const phoneNames = (session.phoneNames as Record<string, string>) || {};
+
+  const initialScenes = session.scenes.map((scene) => ({
+    index: scene.index,
+    sceneId: scene.id,
+    photos: scene.photos.map((p) => ({ id: p.id, label: p.phoneLabel })),
+  }));
 
   return (
     <main className="min-h-screen bg-[#f8f9fa] py-12 px-4">
@@ -38,7 +43,7 @@ export default async function UploadPage({
           sessionId={session.id}
           phoneLabels={session.phones}
           phoneNames={phoneNames}
-          initialPhotos={session.scenes[0]?.photos || []}
+          initialScenes={initialScenes}
         />
       </div>
     </main>
