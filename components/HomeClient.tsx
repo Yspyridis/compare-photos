@@ -23,7 +23,7 @@ function formatDate(iso: string) {
 }
 
 export default function HomeClient({ sessions }: { sessions: Session[] }) {
-  const [tab, setTab] = useState<"new" | "history">("new");
+  const [view, setView] = useState<"new" | "history">("new");
   const [sessionList, setSessionList] = useState(sessions);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -77,111 +77,77 @@ export default function HomeClient({ sessions }: { sessions: Session[] }) {
   const labels = phoneCount === 2 ? ["A", "B"] : ["A", "B", "C"];
 
   return (
-    <main className="min-h-screen bg-gray-900 text-white font-sans">
-      <div className="max-w-sm mx-auto px-6 pt-24 pb-24">
-        {/* ── Brand ── */}
-        <div className="text-center mb-16">
-          <h1 className="text-5xl font-black tracking-tight leading-none">
-            Blind Frame
-          </h1>
-          <p className="text-gray-400 text-sm mt-4 leading-relaxed whitespace-nowrap">
-            side-by-side camera tests with identity revealed later
-          </p>
-        </div>
+    <main className="min-h-screen bg-gray-900 text-white font-sans flex flex-col items-center justify-center px-4 py-12">
+      {/* ── Brand ── */}
+      <div className="text-center mb-14">
+        <h1 className="text-4xl font-black tracking-tight">Blind Frame</h1>
+        <p className="text-green-400 text-sm mt-7 whitespace-nowrap">
+          side-by-side camera tests with identity revealed later
+        </p>
+      </div>
 
-        {/* ── Tabs ── */}
-        <div className="flex border-b border-white/10 mb-10">
-          {(["new", "history"] as const).map((t) => {
-            const label =
-              t === "new"
-                ? "New"
-                : `History${sessionList.length > 0 ? ` · ${sessionList.length}` : ""}`;
-            const active = tab === t;
-            return (
-              <button
-                key={t}
-                onClick={() => setTab(t)}
-                className={`relative pb-3 mr-7 text-sm font-medium transition-colors ${
-                  active ? "text-white" : "text-gray-500 hover:text-gray-300"
-                }`}
-              >
-                {label}
-                {active && (
-                  <span className="absolute bottom-0 inset-x-0 h-px bg-white" />
-                )}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* ── New Test form ── */}
-        {tab === "new" && (
-          <form onSubmit={handleSubmit} className="space-y-10">
-            {/* Title */}
+      {/* ── Card ── */}
+      <div className="w-full max-w-sm aspect-square bg-gray-800/60 border border-white/10 rounded-3xl p-6 flex flex-col justify-between">
+        {view === "new" ? (
+          <form onSubmit={handleSubmit} className="flex flex-col gap-6 h-full">
+            {/* Test name */}
             <input
               required
               type="text"
-              placeholder="Test name…"
+              placeholder="Comparison name"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full bg-transparent border-b border-white/15 pb-3 text-sm font-semibold text-white placeholder:text-gray-700 focus:outline-none focus:border-white/40 transition-colors"
+              className="w-full bg-transparent border-b border-white/15 pb-2.5 text-sm font-medium text-white placeholder:text-gray-600 focus:outline-none focus:border-white/40 transition-colors"
             />
 
-            {/* Device count + names combined */}
-            <div className="space-y-6">
-              {/* Count toggle */}
-              <div className="flex items-center gap-1">
-                {[2, 3].map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    onClick={() => setPhoneCount(n)}
-                    className={`px-3.5 py-1.5 text-sm font-semibold transition-all border-b ${
-                      phoneCount === n
-                        ? "border-white/50 text-white"
-                        : "border-transparent text-gray-600 hover:text-gray-400"
-                    }`}
-                  >
-                    {n} devices
-                  </button>
-                ))}
-              </div>
+            {/* Device count toggle */}
+            <div className="flex items-center gap-2">
+              {[2, 3].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setPhoneCount(n)}
+                  className={`px-4 py-1.5 text-sm font-medium rounded-lg border transition-all duration-200 ${
+                    phoneCount === n
+                      ? "border-white/25 text-white"
+                      : "border-transparent text-gray-500 hover:text-gray-300"
+                  }`}
+                >
+                  {n} devices
+                </button>
+              ))}
+            </div>
 
-              {/* Device name inputs */}
-              <div
-                className={`grid gap-x-6 gap-y-7 ${
-                  phoneCount === 3 ? "grid-cols-3" : "grid-cols-2"
-                }`}
-              >
-                {labels.map((label) => (
-                  <div key={label}>
-                    <p className="text-[11px] font-semibold text-gray-600 tracking-widest uppercase mb-2">
-                      {label}
-                    </p>
-                    <input
-                      required
-                      type="text"
-                      placeholder="Device name"
-                      value={phoneNames[label]}
-                      onChange={(e) => handleNameChange(label, e.target.value)}
-                      className="w-full bg-transparent border-b border-white/15 pb-2 text-sm text-white placeholder:text-gray-700 focus:outline-none focus:border-white/40 transition-colors"
-                    />
-                  </div>
-                ))}
-              </div>
+            {/* Device name inputs — no labels, placeholder only */}
+            <div
+              className={`grid gap-4 ${
+                phoneCount === 3 ? "grid-cols-3" : "grid-cols-2"
+              }`}
+            >
+              {labels.map((label) => (
+                <input
+                  key={label}
+                  required
+                  type="text"
+                  placeholder="Device name"
+                  value={phoneNames[label]}
+                  onChange={(e) => handleNameChange(label, e.target.value)}
+                  className="w-full bg-transparent border-b border-white/15 pb-2 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-white/40 transition-colors"
+                />
+              ))}
             </div>
 
             {/* Submit */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full group flex items-center justify-center gap-2 border border-transparent hover:border-white/30 disabled:opacity-40 text-white font-semibold text-sm py-3.5 rounded-xl transition-all duration-300"
+              className="w-full group flex items-center justify-center gap-2 hover:text-green-400 disabled:opacity-40 text-white font-semibold text-sm py-3 rounded-xl transition-colors duration-200 mt-auto"
             >
               {loading ? (
                 <Loader2 className="animate-spin" size={16} />
               ) : (
                 <>
-                  Create session
+                  Create comparison
                   <ArrowRight
                     size={15}
                     className="group-hover:translate-x-0.5 transition-transform"
@@ -190,13 +156,11 @@ export default function HomeClient({ sessions }: { sessions: Session[] }) {
               )}
             </button>
           </form>
-        )}
-
-        {/* ── History ── */}
-        {tab === "history" && (
-          <>
+        ) : (
+          /* ── History view ── */
+          <div className="flex flex-col gap-1">
             {sessionList.length === 0 ? (
-              <p className="text-gray-600 text-sm text-center py-16">
+              <p className="text-gray-600 text-sm text-center py-10">
                 No tests yet.
               </p>
             ) : (
@@ -211,24 +175,22 @@ export default function HomeClient({ sessions }: { sessions: Session[] }) {
                   return (
                     <div
                       key={session.id}
-                      className={`flex items-center gap-4 py-4 transition-opacity ${
+                      className={`flex items-center gap-3 py-3.5 transition-opacity ${
                         isDeleting ? "opacity-30 pointer-events-none" : ""
                       }`}
                     >
-                      {/* Info */}
                       <Link
                         href={`/session/${session.id}/review`}
                         className="flex-1 min-w-0 group"
                       >
-                        <p className="text-sm font-medium text-white group-hover:text-gray-200 transition-colors truncate leading-snug">
+                        <p className="text-sm font-medium text-white group-hover:text-gray-200 transition-colors truncate">
                           {session.title}
                         </p>
-                        <p className="text-xs text-gray-500 truncate mt-0.5 leading-snug">
+                        <p className="text-xs text-gray-500 truncate mt-0.5">
                           {deviceNames}
                         </p>
                       </Link>
 
-                      {/* Meta */}
                       <div className="text-right shrink-0 hidden sm:block">
                         <p className="text-xs text-gray-600">
                           {session.sceneCount}{" "}
@@ -239,7 +201,6 @@ export default function HomeClient({ sessions }: { sessions: Session[] }) {
                         </p>
                       </div>
 
-                      {/* Actions */}
                       <div className="flex items-center gap-1 shrink-0">
                         {isConfirming ? (
                           <>
@@ -264,7 +225,7 @@ export default function HomeClient({ sessions }: { sessions: Session[] }) {
                             {isDeleting ? (
                               <Loader2
                                 size={13}
-                                className="text-gray-600 animate-spin mr-1"
+                                className="text-gray-600 animate-spin"
                               />
                             ) : (
                               <button
@@ -288,8 +249,25 @@ export default function HomeClient({ sessions }: { sessions: Session[] }) {
                 })}
               </div>
             )}
-          </>
+          </div>
         )}
+      </div>
+
+      {/* ── Bottom nav ── */}
+      <div className="flex items-center gap-3 mt-8 text-sm text-gray-600">
+        <button
+          onClick={() => setView(view === "history" ? "new" : "history")}
+          className="hover:text-gray-400 transition-colors"
+        >
+          {view === "history" ? "New comparison" : "History"}
+          {view === "new" && sessionList.length > 0 && (
+            <span className="ml-1 text-gray-700">· {sessionList.length}</span>
+          )}
+        </button>
+        <span>·</span>
+        <a href="#" className="hover:text-gray-400 transition-colors">
+          About
+        </a>
       </div>
     </main>
   );

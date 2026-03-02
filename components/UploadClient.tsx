@@ -9,10 +9,8 @@ import {
   Image as ImageIcon,
   ArrowRight,
   Plus,
-  Layers,
   Trash2,
   RotateCcw,
-  AlertTriangle,
   X,
 } from "lucide-react";
 
@@ -23,7 +21,7 @@ interface PhotoEntry {
 
 interface SceneState {
   index: number;
-  sceneId: string | null; // null for scenes not yet persisted to DB
+  sceneId: string | null;
   photos: PhotoEntry[];
 }
 
@@ -46,15 +44,11 @@ export default function UploadClient({
       : [{ index: 0, sceneId: null, photos: [] }],
   );
 
-  // `${sceneIndex}-${label}` while uploading a photo
   const [uploading, setUploading] = useState<string | null>(null);
-  // photoId currently being deleted (redo)
   const [deletingPhoto, setDeletingPhoto] = useState<string | null>(null);
-  // scene index awaiting delete confirmation
   const [confirmDeleteScene, setConfirmDeleteScene] = useState<number | null>(
     null,
   );
-  // scene index currently being deleted
   const [deletingScene, setDeletingScene] = useState<number | null>(null);
 
   const router = useRouter();
@@ -69,7 +63,6 @@ export default function UploadClient({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Detect format from magic bytes (some Linux browsers leave type blank)
     const header = await file.slice(0, 4).arrayBuffer();
     const bytes = new Uint8Array(header);
     const isJpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
@@ -121,7 +114,7 @@ export default function UploadClient({
     }
   };
 
-  // ── Delete photo (redo) ───────────────────────────────────────────────────
+  // ── Delete photo ──────────────────────────────────────────────────────────
 
   const handleDeletePhoto = async (photo: PhotoEntry, sceneIndex: number) => {
     setDeletingPhoto(photo.id);
@@ -145,16 +138,12 @@ export default function UploadClient({
   // ── Delete scene ──────────────────────────────────────────────────────────
 
   const handleDeleteScene = async (scene: SceneState) => {
-    // First click → enter confirm state
     if (confirmDeleteScene !== scene.index) {
       setConfirmDeleteScene(scene.index);
       return;
     }
-
-    // Second click → confirmed
     setConfirmDeleteScene(null);
     setDeletingScene(scene.index);
-
     try {
       if (scene.sceneId) {
         await deleteScene(scene.sceneId, sessionId);
@@ -197,33 +186,33 @@ export default function UploadClient({
   const anySceneComplete = scenes.some(isSceneComplete);
   const isBusy = !!uploading || !!deletingPhoto || !!deletingScene;
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── Empty state ───────────────────────────────────────────────────────────
 
   if (scenes.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-center gap-6">
-        <div className="bg-gray-100 p-5 rounded-2xl">
-          <Layers className="text-gray-400" size={36} />
-        </div>
+      <div className="flex flex-col items-center justify-center py-24 text-center gap-5">
+        <ImageIcon className="text-gray-700" size={32} />
         <div>
-          <p className="font-black text-gray-800 text-xl mb-1">No scenes yet</p>
+          <p className="text-white font-semibold mb-1">No scenes yet</p>
           <p className="text-gray-500 text-sm">
             Add a scene to start uploading photos.
           </p>
         </div>
         <button
           onClick={addScene}
-          className="flex items-center gap-2 px-8 py-3 bg-black text-white rounded-2xl font-bold hover:bg-gray-800 transition-all"
+          className="flex items-center gap-2 text-sm font-medium text-gray-400 hover:text-green-400 transition-colors"
         >
-          <Plus size={18} />
+          <Plus size={14} />
           Add First Scene
         </button>
       </div>
     );
   }
 
+  // ── Main render ───────────────────────────────────────────────────────────
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {scenes.map((scene, displayIndex) => {
         const complete = isSceneComplete(scene);
         const isDeleting = deletingScene === scene.index;
@@ -232,81 +221,59 @@ export default function UploadClient({
         return (
           <div
             key={scene.index}
-            className={`rounded-3xl border-2 p-6 transition-all ${
-              isDeleting
-                ? "opacity-40 pointer-events-none border-gray-100 bg-white"
-                : complete
-                  ? "border-green-200 bg-green-50/30"
-                  : "border-gray-100 bg-white shadow-sm"
+            className={`bg-gray-800/60 border border-white/10 rounded-3xl p-6 transition-all ${
+              isDeleting ? "opacity-30 pointer-events-none" : ""
             }`}
           >
             {/* Scene header */}
             <div className="flex items-center justify-between mb-5">
-              <div className="flex items-center gap-2.5">
-                <div
-                  className={`p-1.5 rounded-lg ${
-                    complete ? "bg-green-100" : "bg-gray-100"
-                  }`}
-                >
-                  {isDeleting ? (
-                    <Loader2 size={16} className="animate-spin text-gray-400" />
-                  ) : (
-                    <Layers
-                      size={16}
-                      className={complete ? "text-green-600" : "text-gray-400"}
-                    />
-                  )}
-                </div>
-                <h2 className="font-black text-gray-900 text-lg">
+              <div className="flex items-center gap-2">
+                {isDeleting ? (
+                  <Loader2 size={14} className="animate-spin text-gray-600" />
+                ) : null}
+                <span className="text-sm font-semibold text-white">
                   Scene {displayIndex + 1}
-                </h2>
+                </span>
+                {complete && (
+                  <span className="text-xs text-green-400">· Complete</span>
+                )}
               </div>
 
               <div className="flex items-center gap-2">
-                {complete && !isConfirming && (
-                  <span className="flex items-center gap-1.5 text-xs font-bold text-green-600 bg-green-100 px-3 py-1 rounded-full">
-                    <CheckCircle2 size={12} />
-                    Complete
-                  </span>
-                )}
-
-                {/* Delete scene button — inline confirm */}
                 {isConfirming ? (
-                  <div className="flex items-center gap-1.5">
-                    <span className="flex items-center gap-1 text-xs font-bold text-red-500">
-                      <AlertTriangle size={12} />
-                      Delete scene?
-                    </span>
+                  <>
+                    <span className="text-xs text-red-400">Delete scene?</span>
                     <button
                       onClick={() => handleDeleteScene(scene)}
                       disabled={isBusy}
-                      className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-lg transition-all"
+                      className="text-xs text-red-400 hover:text-red-300 font-medium transition-colors"
                     >
-                      Yes, delete
+                      Yes
                     </button>
                     <button
                       onClick={() => setConfirmDeleteScene(null)}
-                      className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
-                      aria-label="Cancel"
+                      className="text-gray-600 hover:text-gray-400 transition-colors"
                     >
-                      <X size={14} />
+                      <X size={13} />
                     </button>
-                  </div>
+                  </>
                 ) : (
                   <button
                     onClick={() => handleDeleteScene(scene)}
                     disabled={isBusy}
-                    className="p-1.5 rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="text-gray-700 hover:text-red-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                     aria-label="Delete scene"
                   >
-                    <Trash2 size={15} />
+                    <Trash2 size={13} />
                   </button>
                 )}
               </div>
             </div>
 
-            {/* Phone upload cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Device upload slots */}
+            <div
+              className={`grid gap-3 ${phoneLabels.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}
+            >
               {phoneLabels.map((label) => {
                 const photo = scene.photos.find((p) => p.label === label);
                 const isDone = !!photo;
@@ -318,79 +285,72 @@ export default function UploadClient({
                 return (
                   <div
                     key={label}
-                    className={`relative border-2 border-dashed rounded-2xl p-6 transition-all ${
+                    className={`rounded-2xl border p-6 transition-all ${
                       isDone
-                        ? "border-green-400 bg-green-50/40"
-                        : "border-gray-200 hover:border-blue-300"
+                        ? "border-green-400/25"
+                        : "border-white/10 bg-white/[0.03]"
                     }`}
                   >
-                    <div className="flex flex-col items-center text-center">
-                      <div
-                        className={`p-3 rounded-xl mb-3 ${
-                          isDone
-                            ? "bg-green-100 text-green-600"
-                            : "bg-gray-100 text-gray-400"
-                        }`}
-                      >
-                        {isCurrentUploading || isCurrentDeleting ? (
-                          <Loader2 className="animate-spin" size={24} />
-                        ) : isDone ? (
-                          <CheckCircle2 size={24} />
-                        ) : (
-                          <ImageIcon size={24} />
-                        )}
-                      </div>
-
-                      <h3 className="text-base font-bold text-gray-900 mb-0.5">
+                    {/* Device name row */}
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-sm font-medium text-white truncate">
                         {displayName}
-                      </h3>
-                      <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">
-                        Slot {label}
-                      </p>
-
-                      {/* Not uploaded yet */}
-                      {!isDone && (
-                        <label
-                          className={`cursor-pointer bg-black text-white px-5 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center gap-2 ${
-                            isBusy
-                              ? "opacity-50 pointer-events-none"
-                              : "hover:bg-gray-800"
-                          }`}
-                        >
-                          <Upload size={14} />
-                          {isCurrentUploading ? "Uploading…" : "Select Photo"}
-                          <input
-                            type="file"
-                            className="hidden"
-                            accept="image/jpeg,image/png"
-                            onChange={(e) =>
-                              handleFileChange(e, scene.index, label)
-                            }
-                            disabled={isBusy}
-                          />
-                        </label>
-                      )}
-
-                      {/* Uploaded — show status + redo button */}
-                      {isDone && (
-                        <div className="flex items-center gap-3">
-                          <span className="text-green-600 font-bold text-sm">
-                            Ready ✓
-                          </span>
-                          <button
-                            onClick={() =>
-                              photo && handleDeletePhoto(photo, scene.index)
-                            }
-                            disabled={isBusy}
-                            title="Re-upload this photo"
-                            className="flex items-center gap-1 text-xs text-gray-400 hover:text-orange-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                          >
-                            <RotateCcw size={13} />
-                            Redo
-                          </button>
-                        </div>
+                      </span>
+                      {isCurrentUploading || isCurrentDeleting ? (
+                        <Loader2
+                          size={13}
+                          className="animate-spin text-gray-500 shrink-0"
+                        />
+                      ) : isDone ? (
+                        <CheckCircle2
+                          size={13}
+                          className="text-green-400 shrink-0"
+                        />
+                      ) : (
+                        <ImageIcon
+                          size={13}
+                          className="text-gray-700 shrink-0"
+                        />
                       )}
                     </div>
+
+                    {/* Action row */}
+                    {isDone ? (
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-green-400">Ready</span>
+                        <button
+                          onClick={() =>
+                            photo && handleDeletePhoto(photo, scene.index)
+                          }
+                          disabled={isBusy}
+                          title="Re-upload this photo"
+                          className="flex items-center gap-1 text-xs text-gray-600 hover:text-gray-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <RotateCcw size={11} />
+                          Redo
+                        </button>
+                      </div>
+                    ) : (
+                      <label
+                        className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${
+                          isBusy
+                            ? "text-gray-700 pointer-events-none"
+                            : "text-gray-500 hover:text-white cursor-pointer"
+                        }`}
+                      >
+                        <Upload size={11} />
+                        {isCurrentUploading ? "Uploading…" : "Select photo"}
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept="image/jpeg,image/png"
+                          onChange={(e) =>
+                            handleFileChange(e, scene.index, label)
+                          }
+                          disabled={isBusy}
+                        />
+                      </label>
+                    )}
                   </div>
                 );
               })}
@@ -400,37 +360,25 @@ export default function UploadClient({
       })}
 
       {/* Bottom actions */}
-      <div className="flex items-center justify-between pt-4 pb-8">
+      <div className="flex items-center justify-between pt-4 pb-10">
         <button
           onClick={addScene}
           disabled={!lastSceneComplete || isBusy}
-          className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-bold border-2 transition-all ${
-            lastSceneComplete && !isBusy
-              ? "border-gray-300 text-gray-700 hover:border-gray-400 hover:bg-gray-50 cursor-pointer"
-              : "border-gray-200 text-gray-400 cursor-not-allowed"
-          }`}
+          className="flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-green-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
         >
-          <Plus size={18} />
+          <Plus size={14} />
           Add Scene
         </button>
 
         <button
           onClick={() => router.push(`/session/${sessionId}/compare`)}
           disabled={!anySceneComplete}
-          className={`group flex items-center gap-3 px-10 py-4 rounded-2xl font-black text-lg transition-all ${
-            anySceneComplete
-              ? "bg-blue-600 text-white shadow-xl shadow-blue-200 hover:scale-105"
-              : "bg-gray-200 text-gray-400 cursor-not-allowed"
-          }`}
+          className="group flex items-center gap-2 text-sm font-medium text-white hover:text-green-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
         >
           Start Comparing
           <ArrowRight
-            size={22}
-            className={
-              anySceneComplete
-                ? "group-hover:translate-x-2 transition-transform"
-                : ""
-            }
+            size={14}
+            className="group-hover:translate-x-0.5 transition-transform"
           />
         </button>
       </div>

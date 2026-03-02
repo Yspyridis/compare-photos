@@ -28,14 +28,14 @@ export default async function UploadPage({
   }));
 
   return (
-    <main className="min-h-screen bg-[#f8f9fa] py-12 px-4">
-      <div className="max-w-4xl mx-auto">
+    <main className="min-h-screen bg-gray-900 text-white py-12 px-4">
+      <div className="max-w-2xl mx-auto">
         <div className="mb-10 text-center">
-          <h1 className="text-3xl font-black text-gray-900 tracking-tight mb-2">
+          <h1 className="text-3xl font-black tracking-tight mb-2">
             {session.title}
           </h1>
-          <p className="text-gray-500">
-            Upload the high-res photos for each device to begin the blind test.
+          <p className="text-green-400 text-sm">
+            upload the photos for each device to begin the blind comparison
           </p>
         </div>
 
